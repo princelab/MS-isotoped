@@ -13,11 +13,33 @@ parser = OptionParser.new do |opts|
     puts opts
     exit
   end
+  opts.on('-o STRING', "--output STRING", "Give me a file name for a tsv file output of the information, with an attempt to correlate the information by charge states and hopefully by chromatography (coming soon)") do |outfile|
+    options[:output_results] = outfile
+  end
 
   opts.on("-v", "--verbose", "turn on verbosity") do |v|
     options[:verbose] = v
   end
 
+  opts.on('-z', "--z_state", "Check by Z state that we are actually looking at the right charge state for the matched isotopic pattern") do |z|
+    options[:z_check] = z
+  end
+  opts.on("--intensity_range x,y", Array, "Modify the default Intensity tolerance range, e.g. (DEFAULTS) 0.8,1.2") do |i|
+    i.map!(&:to_f)
+    if i.size == 2 and (i.first < 1 or i.last > 1)
+      options[:intensity_tolerance_range] = i.first..i.last
+    else
+      puts "Invalid range values given\nExiting..."
+      puts opts
+      exit
+    end
+  end
+  opts.on("--ppm N", Float, "Run search at ppm value of N") do |p|
+    options[:ppm_tolerance] = p
+  end
+  opts.on('-d', '--debug_mode', "Add debugging output to the output files") do |d|
+    options[:debugging_output] = d
+  end
 end
 
 parser.parse!
@@ -26,12 +48,14 @@ if ARGV.size == 0
   puts parser
   exit
 end
+$PROTON_MASS = 1.00727638
 
-Tolerance = 10 #(ppm)
+Tolerance = options[:ppm_tolerance] ? options[:ppm_tolerance] : 10 #(ppm)
 Intensity_threshold_MS1 = 1500
 Mass_difference = 8.0507
 Max_charge_state = 3.0
-MS2_intensity_tolerance_range = (0.9..1.1)
+Isotope_mass_tolerance = Tolerance # * 2 ##Perhaps a different value would be better, as the error increases as you drop in intensity 
+MS2_intensity_tolerance_range = options[:intensity_tolerance_range] ? options[:intensity_tolerance_range] : (0.8..1.2)
 # Range metaprogramming
 class Range 
   def *(float)
@@ -50,8 +74,16 @@ end
 def charge_stater_for_mass_tag(mass, charge_state=2)
   mass/charge_state
 end
-def detect_charge_state(initial_mass, spectrum)
-  #TODO
+def calculate_percent_error(int1, int2)
+  (int2-int1)/int1.to_f * 100
+end
+def confirm_charge_state(initial_mass, z, spectrum)
+  test_masses = 1.upto(Max_charge_state).map {|n| [n, initial_mass + n*$PROTON_MASS]}
+  matches = test_masses.map do |test_arr|
+    mass = spectrum.find_nearest(test_arr[1])
+    calculate_ppm_error(mass, test_arr[1]) < Isotope_mass_tolerance ? test_arr.first : nil 
+  end
+  matches.uniq.compact
 end
 def scan_for_isotopes(spectrum)
   #@[return] array of matches
@@ -63,10 +95,15 @@ def scan_for_isotopes(spectrum)
     (1..Max_charge_state).to_a.each do |z|
       index = spectrum.find_nearest_index(mz+charge_stater_for_mass_tag(Mass_difference, z)) 
       intensity_range = MS2_intensity_tolerance_range*int
-      matches << {peaks: spectrum.peaks[index], mass_error: calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]), charge_state: z} if calculate_mass_range_by_ppm(mz+charge_stater_for_mass_tag(Mass_difference, z)).include?(spectrum.mzs[index]) and intensity_range.include?(spectrum.intensities[index])
+      matches << { base_peak: [mz,int], 
+        heavy_peak: spectrum.peaks[index], 
+        mass_error: calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]),
+        charge_state: z, 
+        intensity_error_percentage: calculate_percent_error(int, spectrum.intensities[index])
+      } if calculate_mass_range_by_ppm(mz+charge_stater_for_mass_tag(Mass_difference, z)).include?(spectrum.mzs[index]) and intensity_range.include?(spectrum.intensities[index])
     end 
   end
-  matches.uniq.map{|a| a.to_s}
+  matches.uniq
 end
 
 # Analysis
@@ -78,13 +115,32 @@ ARGV.each do |file|
       next if spectrum.ms_level > 1
       resp = scan_for_isotopes(spectrum)
       if resp.size >= 1
-        matches << ["id: #{spectrum.id}\tRT: #{spectrum.retention_time}", resp] 
+        matches << ["id: #{spectrum.id}\tRT: #{spectrum.retention_time}", resp.to_s] 
 # TODO: Check matches for consistency between runs
         results << [spectrum, resp] if options[:output_results]
       end
     end
     puts matches.join("\n")
-  end
+    if options[:output_results]
+      File.open(options[:output_results], 'w') do |out|
+        # Output the data, after analyzing it for isotopic distribution matches by Z state and chromatographic correlations from scan to scan
+      # Z state checking 
+        results.each do |arr|
+          spectrum = arr.first
+          arr.last.each do |resp|
+            charges = confirm_charge_state(resp[:base_peak].first, resp[:charge_state], spectrum)
+            if charges.include?(resp[:charge_state])
+              out.puts "==== #{spectrum.id[/scan=\d*/]}\t@#{spectrum.retention_time} seconds\t===="
+              out.puts resp
+              out.puts "charge_state confirmed:\t#{charges}"
+            else
+              out.puts "***#{resp.to_s}\t Doesn't match on charge" if options[:debugging_output]
+            end
+          end
+        end # Reults.each
+      end # File writing
+    end # options[:output_results]
+  end # Mspire::Mzml.open
 end
 
 

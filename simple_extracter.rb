@@ -4,7 +4,12 @@ require 'mspire/mzml'
 require 'optparse'
 # Debugging tool: 
   require 'pry'
-
+TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :scan_number)
+                         { base_peak: [mz,int], 
+        heavy_peak: spectrum.peaks[index], 
+        mass_error: calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]),
+        charge_state: z, 
+        intensity_error_percentage: calculate_percent_error(int, spectrum.intensities[index])
 options = {}
 parser = OptionParser.new do |opts|
   opts.banner = "#{__FILE__} file.mzML"
@@ -39,6 +44,9 @@ parser = OptionParser.new do |opts|
   end
   opts.on('-d', '--debug_mode', "Add debugging output to the output files") do |d|
     options[:debugging_output] = d
+  end
+  opts.on('--kalman', 'Output some data for generating XIC plots and matching to Kalman filters') do |k|
+    options[:kalman] = k
   end
 end
 
@@ -95,11 +103,7 @@ def scan_for_isotopes(spectrum)
     (1..Max_charge_state).to_a.each do |z|
       index = spectrum.find_nearest_index(mz+charge_stater_for_mass_tag(Mass_difference, z)) 
       intensity_range = MS2_intensity_tolerance_range*int
-      matches << { base_peak: [mz,int], 
-        heavy_peak: spectrum.peaks[index], 
-        mass_error: calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]),
-        charge_state: z, 
-        intensity_error_percentage: calculate_percent_error(int, spectrum.intensities[index])
+      matches << TagEvidence.new([mz,int], spectrum.peaks[index], calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]), z, calculate_percent_error(int, spectrum.intensities[index]), spectrum.retention_time, spectrum.id[/scan=(\d*)/,1])
       } if calculate_mass_range_by_ppm(mz+charge_stater_for_mass_tag(Mass_difference, z)).include?(spectrum.mzs[index]) and intensity_range.include?(spectrum.intensities[index])
     end 
   end
@@ -115,7 +119,7 @@ ARGV.each do |file|
       next if spectrum.ms_level > 1
       resp = scan_for_isotopes(spectrum)
       if resp.size >= 1
-        matches << ["id: #{spectrum.id}\tRT: #{spectrum.retention_time}", resp.to_s] 
+        matches << [resp.to_s] 
 # TODO: Check matches for consistency between runs
         results << [spectrum, resp] if options[:output_results]
       end
@@ -137,9 +141,14 @@ ARGV.each do |file|
               out.puts "***#{resp.to_s}\t Doesn't match on charge" if options[:debugging_output]
             end
           end
-        end # Reults.each
+        end # Results.each
       end # File writing
     end # options[:output_results]
+    if options[:kalman]
+      File.open(File.basename(file)[/(.*)\.mzML/,1]+'_kalman.txt', 'w') do |out|
+        # Decide how to output the data
+      end # File.open ***_kalman.txt
+    end #options[:kalman]
   end # Mspire::Mzml.open
 end
 

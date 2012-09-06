@@ -53,12 +53,14 @@ $PROTON_MASS = 1.00727638
 
 
 
-Mass_shift_pairs = 401.531
+Mass_shift_pairs = 401.0762
 Dead_end_doublet = [472.593, 469.5679] #"4.0251 Dalton split at ~472.52 below light precursor"
-Dead_end_reporter_ions = [474.593,478.6181,528.657, 532.6821,611.804, 618.8542] # From their TOF/TOF data #[474.16, 478.16, 528.20, 536.25, 611.29, 619.29]
+Dead_end_reporter_ions = [474.16,528.20,611.29, 478.19, 536.25, 619.34] # From their TOF/TOF data #[474.16, 478.16, 528.20, 536.25, 611.29, 619.29]
+#Dead_end_reporter_ions = [474.593,478.6181,528.657, 532.6821,611.804, 618.8542] # From their TOF/TOF data #[474.16, 478.16, 528.20, 536.25, 611.29, 619.29]
 
-Reporter_ion_tolerance = 20 # ppm
-Intensity_threshold = 500 
+Reporter_ion_tolerance = 500 # ppm
+Intensity_threshold = 800 
+EvidenceIntensityThreshold = 800
 
 
 ## Fxns I might want to use... 
@@ -107,15 +109,16 @@ ARGV.each do |file|
         id = spectrum.find_nearest_index(check_mass)
         match = spectrum[id].first
         error = calculate_ppm_error(check_mass, match)
-        evidences << CrosslinkingEvidence.new(:dead_end_loss, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time) if error.abs < Reporter_ion_tolerance and spectrum[id].last > Intensity_threshold
+        evidences << CrosslinkingEvidence.new(:dead_end_loss, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, nil, nil, match, spectrum[id].last) if error.abs < Reporter_ion_tolerance and spectrum[id].last > Intensity_threshold
       end
       Dead_end_reporter_ions.map do |ion|
         id = spectrum.find_nearest_index(ion)
         match = spectrum[id].first
         error = calculate_ppm_error(ion, match)
-        evidences << CrosslinkingEvidence.new(:dead_end_reporter, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time) if error.abs < Reporter_ion_tolerance and spectrum[id].last > Intensity_threshold
+        evidences << CrosslinkingEvidence.new(:dead_end_reporter, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, nil, nil, match, spectrum[id].last) if error.abs < Reporter_ion_tolerance and spectrum[id].last > Intensity_threshold
       end
       spectrum.peaks do |mz,int|
+        next if int < EvidenceIntensityThreshold
         match = spectrum.find_nearest_index(mz+Mass_shift_pairs) 
         error = calculate_ppm_error(mz+Mass_shift_pairs, spectrum[match].first)
         if error.abs < Reporter_ion_tolerance and spectrum[match].last > Intensity_threshold
@@ -125,8 +128,11 @@ ARGV.each do |file|
       matches << evidences unless evidences.empty?
     end # mzml.each
     require 'yaml'
-    File.open(File.basename(file)[/(.*)\.mzML/,1]+'_ms2_crosslinks.yml', 'w') do |out|
+    File.open(File.basename(file)[/(.*)\.mzML/,1]+'_ms2_extradata.yml', 'w') do |out|
       YAML.dump(matches, out)
+    end
+    File.open(File.basename(file)[/(.*)\.mzML/,1]+'_ms2_crosslinks.yml', 'w') do |out|
+      YAML.dump(matches.select{|a| a.size > 1 }, out)
     end
   end # open(file)
 end # ARGV.each

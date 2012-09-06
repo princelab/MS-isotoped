@@ -1,4 +1,6 @@
 *.gem
+.dropbox
+*.swp
 *.rbc
 .bundle
 .config

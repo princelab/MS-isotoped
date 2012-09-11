@@ -93,13 +93,13 @@ ARGV.each do |file|
         id = spectrum.find_nearest_index(check_mass)
         match = spectrum[id].first
         error = calculate_ppm_error(check_mass, match)
-        evidences << CrosslinkingEvidence.new(:dead_end_loss, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, nil, nil, match, spectrum[id].last, spectrum.precursors.first.selected_ions.first.fetch_by_acc("MS:1000744")) if error.abs < Reporter_ion_tolerance and spectrum[id].last > Intensity_threshold
+        evidences << CrosslinkingEvidence.new(:dead_end_loss, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, nil, nil, match, spectrum[id].last, spectrum.precursors.first.selected_ions.first.fetch_by_acc("MS:1000744")) if error.abs < Reporter_ion_tolerance and spectrum[id].last > EvidenceIntensityThreshold
       end
       Dead_end_reporter_ions.map do |ion|
         id = spectrum.find_nearest_index(ion)
         match = spectrum[id].first
         error = calculate_ppm_error(ion, match)
-        evidences << CrosslinkingEvidence.new(:dead_end_reporter, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, nil, nil, match, spectrum[id].last, spectrum.precursors.first.selected_ions.first.fetch_by_acc("MS:1000744")) if error.abs < Reporter_ion_tolerance and spectrum[id].last > Intensity_threshold
+        evidences << CrosslinkingEvidence.new(:dead_end_reporter, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, nil, nil, match, spectrum[id].last, spectrum.precursors.first.selected_ions.first.fetch_by_acc("MS:1000744")) if error.abs < Reporter_ion_tolerance and spectrum[id].last > EvidenceIntensityThreshold
       end
       spectrum.peaks do |mz,int|
         next if int < EvidenceIntensityThreshold

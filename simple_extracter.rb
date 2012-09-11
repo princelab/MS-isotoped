@@ -20,7 +20,7 @@ parser = OptionParser.new do |opts|
     puts opts
     exit
   end
-  opts.on('-o STRING', "--output STRING", "Give me a file name for a tsv file output of the information, with an attempt to correlate the information by charge states and hopefully by chromatography (coming soon)") do |outfile|
+  opts.on('-o STRING', "--output STRING", "Give me a file name for a yml file output of the information, with an attempt to correlate the information by charge states and hopefully by chromatography (coming soon)") do |outfile|
     options[:output_results] = outfile
   end
 

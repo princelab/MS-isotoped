@@ -13,28 +13,14 @@ parser = OptionParser.new do |opts|
     puts opts
     exit
   end
-  opts.on('-o STRING', "--output STRING", "Give me a file name for a tsv file output of the information, with an attempt to correlate the information by charge states and hopefully by chromatography (coming soon)") do |outfile|
-    options[:output_results] = outfile
-  end
 
   opts.on("-v", "--verbose", "turn on verbosity") do |v|
     options[:verbose] = v
   end
-
-  opts.on('-z', "--z_state", "Check by Z state that we are actually looking at the right charge state for the matched isotopic pattern") do |z|
-    options[:z_check] = z
+  opts.on('-i N', '--intensity N', Float, "Minimum intensity value acceptable for evidence peaks") do |i|
+    options[:minimum_intensity] = i
   end
-  opts.on("--intensity_range x,y", Array, "Modify the default Intensity tolerance range, e.g. (DEFAULTS) 0.8,1.2") do |i|
-    i.map!(&:to_f)
-    if i.size == 2 and (i.first < 1 or i.last > 1)
-      options[:intensity_tolerance_range] = i.first..i.last
-    else
-      puts "Invalid range values given\nExiting..."
-      puts opts
-      exit
-    end
-  end
-  opts.on("--ppm N", Float, "Run search at ppm value of N") do |p|
+  opts.on('-p N', "--ppm N", Float, "Run search at ms2 ppm value of N") do |p|
     options[:ppm_tolerance] = p
   end
   opts.on('-d', '--debug_mode', "Add debugging output to the output files") do |d|
@@ -45,7 +31,6 @@ end
 parser.parse!
 if ARGV.size == 0
   puts "Input file required"
-  puts "********ALERT************\nThe options given here are wrong..."
   puts parser
   exit
 end
@@ -58,9 +43,8 @@ Dead_end_doublet = [472.593, 469.5679] #"4.0251 Dalton split at ~472.52 below li
 Dead_end_reporter_ions = [474.16,528.20,611.29, 478.19, 536.25, 619.34] # From their TOF/TOF data #[474.16, 478.16, 528.20, 536.25, 611.29, 619.29]
 #Dead_end_reporter_ions = [474.593,478.6181,528.657, 532.6821,611.804, 618.8542] # From their TOF/TOF data #[474.16, 478.16, 528.20, 536.25, 611.29, 619.29]
 
-Reporter_ion_tolerance = 500 # ppm
-Intensity_threshold = 800 
-EvidenceIntensityThreshold = 800
+Reporter_ion_tolerance = options[:ppm_tolerance] ? options[:ppm_tolerance] : 500 # ppm
+EvidenceIntensityThreshold = options[:minimum_intensity] ? options[:minimum_intensity] : 800
 
 
 ## Fxns I might want to use... 
@@ -121,7 +105,7 @@ ARGV.each do |file|
         next if int < EvidenceIntensityThreshold
         match = spectrum.find_nearest_index(mz+Mass_shift_pairs) 
         error = calculate_ppm_error(mz+Mass_shift_pairs, spectrum[match].first)
-        if error.abs < Reporter_ion_tolerance and spectrum[match].last > Intensity_threshold
+        if error.abs < Reporter_ion_tolerance and spectrum[match].last > EvidenceIntensityThreshold
           evidences << CrosslinkingEvidence.new(:crosslink_match, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, mz, int, spectrum[match].first, spectrum[match].last)
         end
       end

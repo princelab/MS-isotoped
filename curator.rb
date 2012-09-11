@@ -23,9 +23,14 @@ parser = OptionParser.new do |opts|
 end
 
 parser.parse!
-
-simple_file = ARGV.shift
-ms2_file = ARGV.shift
+if ARGV.size > 0
+  simple_file = ARGV.shift
+  ms2_file = ARGV.shift
+else
+  puts "FAILURE, no files given"
+  puts parser
+  exit
+end
 
 CrosslinkingEvidence = Struct.new(:type, :ppm_error, :scan_number, :retention_time, :base_mz, :base_int, :match_mz, :match_int, :precursor_mass)
 TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :scan_number)
@@ -73,3 +78,8 @@ simples.each do |tagevidence|
 end
 
 p resp
+if options[:ms3_output]
+  File.open("ms3_curation_output_#{Time.now.to_i}.txt", 'w') do |out|
+    out.puts resp.join("\n")
+  end
+end

@@ -5,11 +5,13 @@ require 'optparse'
 # Debugging tool: 
   require 'pry'
 TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :scan_number)
+=begin
                          { base_peak: [mz,int], 
         heavy_peak: spectrum.peaks[index], 
         mass_error: calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]),
         charge_state: z, 
         intensity_error_percentage: calculate_percent_error(int, spectrum.intensities[index])
+=end
 options = {}
 parser = OptionParser.new do |opts|
   opts.banner = "#{__FILE__} file.mzML"
@@ -103,8 +105,7 @@ def scan_for_isotopes(spectrum)
     (1..Max_charge_state).to_a.each do |z|
       index = spectrum.find_nearest_index(mz+charge_stater_for_mass_tag(Mass_difference, z)) 
       intensity_range = MS2_intensity_tolerance_range*int
-      matches << TagEvidence.new([mz,int], spectrum.peaks[index], calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]), z, calculate_percent_error(int, spectrum.intensities[index]), spectrum.retention_time, spectrum.id[/scan=(\d*)/,1])
-      } if calculate_mass_range_by_ppm(mz+charge_stater_for_mass_tag(Mass_difference, z)).include?(spectrum.mzs[index]) and intensity_range.include?(spectrum.intensities[index])
+      matches << TagEvidence.new([mz,int], spectrum.peaks[index], calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]), z, calculate_percent_error(int, spectrum.intensities[index]), spectrum.retention_time, spectrum.id[/scan=(\d*)/,1]) if calculate_mass_range_by_ppm(mz+charge_stater_for_mass_tag(Mass_difference, z)).include?(spectrum.mzs[index]) and intensity_range.include?(spectrum.intensities[index])
     end 
   end
   matches.uniq
@@ -124,24 +125,30 @@ ARGV.each do |file|
         results << [spectrum, resp] if options[:output_results]
       end
     end
-    puts matches.join("\n")
+    #puts matches.join("\n")
     if options[:output_results]
       File.open(options[:output_results], 'w') do |out|
-        # Output the data, after analyzing it for isotopic distribution matches by Z state and chromatographic correlations from scan to scan
-      # Z state checking 
-        results.each do |arr|
-          spectrum = arr.first
-          arr.last.each do |resp|
-            charges = confirm_charge_state(resp[:base_peak].first, resp[:charge_state], spectrum)
-            if charges.include?(resp[:charge_state])
-              out.puts "==== #{spectrum.id[/scan=\d*/]}\t@#{spectrum.retention_time} seconds\t===="
-              out.puts resp
-              out.puts "charge_state confirmed:\t#{charges}"
-            else
-              out.puts "***#{resp.to_s}\t Doesn't match on charge" if options[:debugging_output]
+      require 'yaml'
+        File.open(options[:output_results].sub('.tsv', '_ms1s.yml'), 'w') do |out_yaml|
+          yaml_output = []
+          # Output the data, after analyzing it for isotopic distribution matches by Z state and chromatographic correlations from scan to scan
+          # Z state checking 
+          results.each do |arr|
+            spectrum = arr.first
+            arr.last.each do |resp|
+              charges = confirm_charge_state(resp[:base_peak].first, resp[:charge_state], spectrum)
+              if charges.include?(resp[:charge_state])
+                out.puts "==== #{spectrum.id[/scan=\d*/]}\t@#{spectrum.retention_time} seconds\t===="
+                out.puts resp
+                out.puts "charge_state confirmed:\t#{charges}"
+              else
+                out.puts "***#{resp.to_s}\t Doesn't match on charge" if options[:debugging_output]
+              end
             end
-          end
-        end # Results.each
+            arr.last.each {|a| yaml_output << a}
+          end # Results.each
+          YAML.dump(yaml_output, out_yaml)
+        end # yml File output
       end # File writing
     end # options[:output_results]
     if options[:kalman]

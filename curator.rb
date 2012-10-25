@@ -1,5 +1,10 @@
 #!/usr/bin/env ruby 
 #Reads the output from simple_extractor and ms2_extractor
+Profile = false
+if Profile
+  require 'ruby-prof'
+  RubyProf.start
+end
 
 #calls ms3 extractor?
 class Range
@@ -83,3 +88,19 @@ if options[:ms3_output]
     out.puts resp.join("\n")
   end
 end
+
+outfile = File.absolute_path(simple_file).sub("_ms1s.yml","_curated_hits.txt")
+File.open(outfile, 'w') do |out|
+  out.puts resp.join("\n")
+end
+puts "OUTFILE: #{outfile}" 
+
+if Profile
+  result = RubyProf.stop
+
+  # Print a flat profile to text
+  printer = RubyProf::FlatPrinter.new(result)
+  printer.print(STDOUT)
+end
+  
+

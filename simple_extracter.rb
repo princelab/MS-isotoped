@@ -114,6 +114,9 @@ end
 
 # Analysis
 ARGV.each do |file|
+  if options[:output_results] == 'auto'
+    options[:output_results] = File.absolute_path(file).sub('.mzML', '.yml')
+  end
   file2 = nil
   matches = []
   results = []

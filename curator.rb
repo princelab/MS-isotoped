@@ -15,7 +15,7 @@ parser = OptionParser.new do |opts|
     options[:verbose] = v
   end
 
-  opts.banner = "Usage: ruby #{__FILE__} simple_extractor_output_file.yml ms2_extractor_output_file.yml"
+  opts.banner = "Usage: ruby #{__FILE__} simple_extractor_output_file.tsv ms2_extractor_output_file.tsv"
 
   opts.on('-m','--ms3','Output ms3 spectra') do |m|
     options[:ms3_output] = m

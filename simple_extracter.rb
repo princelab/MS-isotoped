@@ -21,10 +21,7 @@ parser = OptionParser.new do |opts|
     puts opts
     exit
   end
-  opts.on('-o STRING', "--output STRING", "Give me a file name (or 'auto' for automatic filename generation) for a yml file output of the information, with an attempt to correlate the information by charge states and hopefully by chromatography (coming soon)") do |outfile|
-    if outfile == 'auto'
-      outfile = File.absolute_path(ARGV.first).sub('.mzML', ".yml")
-    end
+  opts.on('-o STRING', "--output STRING", "Give me a file name for a yml file output of the information, with an attempt to correlate the information by charge states and hopefully by chromatography (coming soon)") do |outfile|
     options[:output_results] = outfile
   end
 

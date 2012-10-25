@@ -84,6 +84,8 @@ end
 
 CrosslinkingEvidence = Struct.new(:type, :ppm_error, :scan_number, :retention_time, :base_mz, :base_int, :match_mz, :match_int, :precursor_mass)
 
+extradata_file = nil
+data_file = nil
 
 ARGV.each do |file|
   Mspire::Mzml.open(file) do |mzml|
@@ -116,13 +118,17 @@ ARGV.each do |file|
       matches << evidences unless evidences.empty?
     end # mzml.each
     require 'yaml'
-    File.open(File.basename(file)[/(.*)\.mzML/,1]+'_ms2_extradata.yml', 'w') do |out|
+    extradata_file = File.absolute_path(file)[/(.*)\.mzML/,1]+'_ms2_extradata.yml'
+    data_file = File.absolute_path(file)[/(.*)\.mzML/,1]+'_ms2_crosslinks.yml' 
+    File.open(extradata_file, 'w') do |out|
       YAML.dump(matches, out)
     end
-    File.open(File.basename(file)[/(.*)\.mzML/,1]+'_ms2_crosslinks.yml', 'w') do |out|
+    File.open(data_file, 'w') do |out|
       YAML.dump(matches.select{|a| a.size > 1 }, out)
     end
   end # open(file)
+  puts "Extra Data File: #{extradata_file}"
+  puts "Data File: #{data_file}"
 end # ARGV.each
 
 #result = RubyProf.stop

@@ -156,7 +156,7 @@ ARGV.each do |file|
     end # File writing
   end # options[:output_results]
   if options[:kalman]
-    File.open(File.basename(file)[/(.*)\.mzML/,1]+'_kalman.txt', 'w') do |out|
+    File.open(File.absolute_path(file)[/(.*)\.mzML/,1]+'_kalman.txt', 'w') do |out|
       # Decide how to output the data
     end # File.open ***_kalman.txt
   end #options[:kalman]

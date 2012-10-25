@@ -9,7 +9,13 @@ end
 #calls ms3 extractor?
 class Range
   def +(number)
+    begin 
     (self.min + number)..(self.max + number)
+    rescue 
+      binding.pry
+      abort
+
+    end
   end
 end
 
@@ -24,6 +30,12 @@ parser = OptionParser.new do |opts|
 
   opts.on('-m','--ms3','Output ms3 spectra') do |m|
     options[:ms3_output] = m
+  end
+  opts.on('-p', '--ppm N', Integer, "PPM tolerance for precursor ion matching") do |p|
+    options[:parent_tolerance] = p
+  end
+  opts.on('-s', '--scan N', Integer, "Scan +/- tolerance for scan number alignment between the ms1 and ms2 evidence") do |s|
+    options[:scan_tolerance] = (-s..s)
   end
 end
 
@@ -46,28 +58,36 @@ require 'yaml'
 simples = YAML::load_file(simple_file)
 ms2s = YAML::load_file(ms2_file)
 
-ScanRange = -20..20
-ToleranceRange = -0.5..0.5
+ScanRange = options[:scan_tolerance] ? options[:scan_tolerance] : (-20..20)
+# implement an alternative search by time difference between scans
+Tolerance = options[:parent_tolerance] ? options[:parent_tolerance] : 500
 
-def check_ms2s(mass_arr, ms2s)
+def check_ms2s(mass_arr, ms2s, scan)
   response = []
   ms2s.each do |ms2|
     mass = ms2.first.precursor_mass
-    scan = ms2.first.scan_number
+    loop_scan = ms2.first.scan_number.to_i
     mz_check = check_mass_by_tolerance(mass, mass_arr)
-    scan_check = check_scan_range(scan)
+   # puts ["scan:", scan, loop_scan] if mz_check
+    scan_check = check_scan_range(loop_scan, ScanRange+scan)
+    #binding.pry
     response << ms2 if mz_check and scan_check
   end
   response
 end
 
-def check_scan_range(scan, range = ScanRange)
+def check_scan_range(scan, range)
   range.include? scan
 end
 
-def check_mass_by_tolerance(mass, mass_arr, tol_range = ToleranceRange)
+def calculate_mass_range_by_ppm(mass, ppm = Tolerance)
+  tol = ppm/1.0e6*mass
+  (mass-tol..mass+tol)
+end
+
+def check_mass_by_tolerance(mass, mass_arr)
   mass_arr.map do |mz|
-    check_range = tol_range+mz
+    check_range = calculate_mass_range_by_ppm(mz)
     ans = check_range.include?(mass)
   end.uniq.first
 end
@@ -77,9 +97,10 @@ curated_hits = []
 
 resp = []
 simples.each do |tagevidence|
-  masses = [tagevidence.base_peak.first, tagevidence.heavy_peak.first]
-  reply = check_ms2s(masses, ms2s)
-  resp << [tagevidence, reply] unless reply.empty?
+  precursor_masses = [tagevidence.base_peak.first, tagevidence.heavy_peak.first]
+  scan = tagevidence.scan_number.to_i
+  reply = check_ms2s(precursor_masses, ms2s, scan)
+  resp << [tagevidence, reply, "#{'='*50}"] unless reply.empty?
 end
 
 p resp

@@ -3,6 +3,7 @@
 #RubyProf.start
 require 'mspire/mzml'
 require 'optparse'
+require 'yaml'
 # Debugging tool: 
   require 'pry'
 TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :scan_number)
@@ -74,6 +75,22 @@ class Range
   end
 end
 
+# Fix the YAML file formatting, to make a series of objects into a single one... 
+def fix_YAML_file(file)
+  lines=File.readlines(file)
+  shift = false
+  File.open(file, 'w') do |out|
+    lines.each do |line|
+      if shift
+        next if line[/^---/]
+        out.print line 
+      end
+      shift = true 
+    end
+  end
+end
+
+
 # Methods 
 def calculate_mass_range_by_ppm(mass, ppm = Tolerance)
   tol = ppm/1.0e6*mass
@@ -120,42 +137,38 @@ ARGV.each do |file|
   file2 = nil
   matches = []
   results = []
-  Mspire::Mzml.open(file) do |mzml|
-    mzml.each do |spectrum|
-      next if spectrum.ms_level > 1
-      resp = scan_for_isotopes(spectrum)
-      if resp.size >= 1
-        matches << [resp.to_s] 
-# TODO: Check matches for consistency between runs
-        results << [spectrum, resp] if options[:output_results]
-      end
-    end
-  end # Mspire File read
-  #puts matches.join("\n")
-  #if options[:output_results]
+  yaml_output = []
   File.open(options[:output_results], 'w') do |out|
-    require 'yaml'
     file2 = options[:output_results].sub('.yml', '_ms1s.yml')
     File.open(file2, 'w') do |out_yaml|
-      yaml_output = []
-      # Output the data, after analyzing it for isotopic distribution matches by Z state and chromatographic correlations from scan to scan
-      # Z state checking 
-      results.each do |arr|
-        spectrum = arr.first
-        arr.last.each do |resp|
-          charges = confirm_charge_state(resp[:base_peak].first, resp[:charge_state], spectrum)
-          if charges.include?(resp[:charge_state])
-            out.puts "==== #{spectrum.id[/scan=\d*/]}\t@#{spectrum.retention_time} seconds\t===="
-            out.puts resp
-            out.puts "charge_state confirmed:\t#{charges}"
-          else
-            out.puts "***#{resp.to_s}\t Doesn't match on charge" if options[:debugging_output]
+      Mspire::Mzml.open(file) do |mzml|
+        mzml.each do |spectrum|
+          next if spectrum.ms_level > 1
+          response = scan_for_isotopes(spectrum)
+          if response.size >= 1
+            response.each do |resp|
+      # TODO: Check matches for consistency between runs
+              charges = confirm_charge_state(resp[:base_peak].first, resp[:charge_state], spectrum)
+              if charges.include?(resp[:charge_state])
+                out.puts "==== #{spectrum.id[/scan=\d*/]}\t@#{spectrum.retention_time} seconds\t===="
+                out.puts resp
+                out.puts "charge_state confirmed:\t#{charges}"
+              else
+                out.puts "***#{resp.to_s}\t Doesn't match on charge" if options[:debugging_output]
+              end
+              yaml_output << resp
+            end # response.each 
+            #out_yaml.puts yaml_output.to_yaml
+            YAML.dump(yaml_output, out_yaml)
+            yaml_output.clear
           end
         end
-        arr.last.each {|a| yaml_output << a}
-      end # Results.each
-      YAML.dump(yaml_output, out_yaml)
-    end # yml File output
+      end # Mspire File read
+    end #out_yaml File 
+  #puts matches.join("\n")
+  #if options[:output_results]
+      # Output the data, after analyzing it for isotopic distribution matches by Z state and chromatographic correlations from scan to scan
+      # Z state checking 
   end # File writing
   #end # options[:output_results]
   if options[:kalman]
@@ -163,6 +176,7 @@ ARGV.each do |file|
       # Decide how to output the data
     end # File.open ***_kalman.txt
   end #options[:kalman]
+  [options[:output_results], file2].map {|f| fix_YAML_file f }
   puts "File1: #{options[:output_results]}"
   puts "File2: #{file2}"
 end

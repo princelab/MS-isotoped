@@ -13,6 +13,7 @@ options = {}
 parser = OptionParser.new do |opts|
   opts.banner = "#{__FILE__} file.mzML"
   opts.separator "Returns: file.tsv"
+  opts.separator "Currently tuned for TOF/TOF ms2 data.  Customize input parameters for your dataset"
   opts.on_tail('-h', "--help", "Display this help and exit") do 
     puts opts
     exit
@@ -112,7 +113,7 @@ ARGV.each do |file|
         match = spectrum.find_nearest_index(mz+Mass_shift_pairs) 
         error = calculate_ppm_error(mz+Mass_shift_pairs, spectrum[match].first)
         if error.abs < Reporter_ion_tolerance and spectrum[match].last > EvidenceIntensityThreshold
-          evidences << CrosslinkingEvidence.new(:crosslink_match, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, mz, int, spectrum[match].first, spectrum[match].last)
+          evidences << CrosslinkingEvidence.new(:crosslink_match, error, spectrum.id[/scan=(\d*)/,1], spectrum.retention_time, mz, int, spectrum[match].first, spectrum[match].last, spectrum.precursors.first.selected_ions.first.fetch_by_acc("MS:1000744"))
         end
       end
       matches << evidences unless evidences.empty?

@@ -5,7 +5,7 @@ require 'mspire/mzml'
 require 'optparse'
 # Debugging tool: 
   require 'pry'
-TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :scan_number)
+TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :base_scan_number, :heavy_scan_number )
 =begin
                          { base_peak: [mz,int], 
         heavy_peak: spectrum.peaks[index], 

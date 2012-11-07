@@ -1,12 +1,17 @@
 #!/usr/bin/env ruby 
-#require 'ruby-prof'
-#RubyProf.start
+
+Profile = false
+if Profile
+  require 'ruby-prof'
+  RubyProf.start
+end
+
 require 'mspire/mzml'
 require 'optparse'
 require 'yaml'
 # Debugging tool: 
   require 'pry'
-TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :scan_number)
+TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :base_scan_number, :heavy_scan_number )
 =begin
                          { base_peak: [mz,int], 
         heavy_peak: spectrum.peaks[index], 
@@ -17,7 +22,7 @@ TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :i
 options = {}
 parser = OptionParser.new do |opts|
   opts.banner = "#{__FILE__} file.mzML"
-  opts.separator "Returns: file.tsv"
+  opts.separator "Returns: file_ms1s.yml"
   opts.on_tail('-h', "--help", "Display this help and exit") do 
     puts opts
     exit
@@ -43,7 +48,7 @@ parser = OptionParser.new do |opts|
       exit
     end
   end
-  opts.on("--ppm N", Float, "Run search at ppm value of N") do |p|
+  opts.on("-p N", "--ppm N", Float, "Run search at ppm value of N") do |p|
     options[:ppm_tolerance] = p
   end
   opts.on('-d', '--debug_mode', "Add debugging output to the output files") do |d|
@@ -51,6 +56,9 @@ parser = OptionParser.new do |opts|
   end
   opts.on('--kalman', 'Output some data for generating XIC plots and matching to Kalman filters') do |k|
     options[:kalman] = k
+  end
+  opts.on('-s N', "--scan N", Integer, "Scan number to forward look to find isotopic matches (useful for deuterium isotopic tags which affect retention time") do |s|
+    options[:scan_offset] = s
   end
 end
 
@@ -65,9 +73,10 @@ $PROTON_MASS = 1.00727638
 Tolerance = options[:ppm_tolerance] ? options[:ppm_tolerance] : 10 #(ppm)
 Intensity_threshold_MS1 = 1500
 Mass_difference = 8.0507
-Max_charge_state = 3.0
+Max_charge_state = 4.0
 Isotope_mass_tolerance = Tolerance # * 2 ##Perhaps a different value would be better, as the error increases as you drop in intensity 
 MS2_intensity_tolerance_range = options[:intensity_tolerance_range] ? options[:intensity_tolerance_range] : (0.8..1.2)
+Max_MS1_scan_offset = options[:scan_offset] ? options[:scan_offset] : 10
 # Range metaprogramming
 class Range 
   def *(float)
@@ -113,7 +122,7 @@ def confirm_charge_state(initial_mass, z, spectrum)
   end
   matches.uniq.compact
 end
-def scan_for_isotopes(spectrum)
+def scan_for_isotopes(spectrum, spectrum2)
   #@[return] array of matches
   matches = []
   check_arr = [spectrum.mzs]
@@ -121,10 +130,15 @@ def scan_for_isotopes(spectrum)
     next if int < Intensity_threshold_MS1
     potential_matches = []
     (1..Max_charge_state).to_a.each do |z|
-      index = spectrum.find_nearest_index(mz+charge_stater_for_mass_tag(Mass_difference, z)) 
+      index = spectrum2.find_nearest_index(mz+charge_stater_for_mass_tag(Mass_difference, z)) 
       intensity_range = MS2_intensity_tolerance_range*int
-      matches << TagEvidence.new([mz,int], spectrum.peaks[index], calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),spectrum.mzs[index]), z, calculate_percent_error(int, spectrum.intensities[index]), spectrum.retention_time, spectrum.id[/scan=(\d*)/,1]) if calculate_mass_range_by_ppm(mz+charge_stater_for_mass_tag(Mass_difference, z)).include?(spectrum.mzs[index]) and intensity_range.include?(spectrum.intensities[index])
-    end 
+      match = spectrum2.peaks[index]
+      matched_mz = match.first
+      matched_int = match.last
+      if calculate_mass_range_by_ppm(mz+charge_stater_for_mass_tag(Mass_difference, z)).include?(matched_mz) and intensity_range.include?(matched_int)
+        matches << TagEvidence.new([mz,int], match, calculate_ppm_error(mz+charge_stater_for_mass_tag(Mass_difference, z),matched_mz), z, calculate_percent_error(int, matched_int), spectrum.retention_time, spectrum.id[/scan=(\d*)/,1], spectrum2.id[/scan=(\d*)/,1]) 
+      end 
+    end
   end
   matches.uniq
 end
@@ -142,9 +156,16 @@ ARGV.each do |file|
     file2 = options[:output_results].sub('.yml', '_ms1s.yml')
     File.open(file2, 'w') do |out_yaml|
       Mspire::Mzml.open(file) do |mzml|
-        mzml.each do |spectrum|
+        max = mzml.size-1
+        mzml.each_with_index do |spectrum, index|
           next if spectrum.ms_level > 1
-          response = scan_for_isotopes(spectrum)
+          response = []
+          (0..Max_MS1_scan_offset).each do |i|
+            next if index+i > max
+            next if mzml[index+i].ms_level > 1
+            response << scan_for_isotopes(spectrum, mzml[index+i])
+          end 
+          response.flatten!
           if response.size >= 1
             response.each do |resp|
       # TODO: Check matches for consistency between runs
@@ -180,10 +201,12 @@ ARGV.each do |file|
   puts "File1: #{options[:output_results]}"
   puts "File2: #{file2}"
 end
-#result = RubyProf.stop
+if Profile
+  result = RubyProf.stop
 
-# Print a flat profile to text
-#printer = RubyProf::FlatPrinter.new(result)
-#printer.print(STDOUT)
+  # Print a flat profile to text
+  printer = RubyProf::FlatPrinter.new(result)
+  printer.print(STDOUT)
+end
 
 

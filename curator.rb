@@ -6,7 +6,7 @@ if Profile
   RubyProf.start
 end
 
-#calls ms3 extractor?
+#TODO ms3 extractor
 class Range
   def +(number)
     begin 
@@ -50,8 +50,7 @@ else
 end
 
 CrosslinkingEvidence = Struct.new(:type, :ppm_error, :scan_number, :retention_time, :base_mz, :base_int, :match_mz, :match_int, :precursor_mass)
-TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :scan_number)
-
+TagEvidence = Struct.new(:base_peak, :heavy_peak, :mass_error, :charge_state, :intensity_error_percentage, :retention_time, :base_scan_number, :heavy_scan_number )
 require 'yaml'
 # Debugging tool
     require 'pry'
